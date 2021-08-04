@@ -1,12 +1,12 @@
 import './App.css';
 import { Upload, Button, Space, Row } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { request } from './request';
 
 function App() {
 	const [file, setFile] = useState(null);
-	const [chunks, setChunks] = useState([]);
+	const chunksRef = useRef([]);
 	const CHUNK_COUNT = 10;
 
 	const beforeUpload = (file) => {
@@ -21,7 +21,7 @@ function App() {
 			chunk: fileChunk,
 			hash: `${file.name}-${index}`,
 		}));
-		setChunks(chunkArr)
+		chunksRef.current = chunkArr;
 		await uploadChunks();
 	};
 
@@ -38,6 +38,9 @@ function App() {
 	};
 
 	const uploadChunks = async () => {
+		const chunks = chunksRef.current;
+		if (chunks.length < 1) return;
+
 		let reqList = chunks
 			.map(({ chunk, hash }) => {
 				let formData = new FormData();
@@ -46,15 +49,18 @@ function App() {
 				formData.append('filename', file.name);
 				return { formData };
 			})
-			.map(async ({ formData }) => {
-				request({ url: 'http://localhost:8080', data: formData });
+			.map(({ formData }) => {
+				return request({
+					url: 'http://localhost:8080',
+					data: formData,
+				});
 			});
 
 		// 发送切片
-		await Promise.all(reqList)
+		let res = await Promise.all(reqList);
 
 		// 发送合并请求
-		// await mergeRequest();
+		await mergeRequest();
 	};
 
 	const createChunks = (file, counts = CHUNK_COUNT) => {
