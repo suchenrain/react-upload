@@ -1,1 +1,10 @@
 @import '~antd/dist/antd.css';
+
+.container {
+	width: 450px;
+	margin: 0 auto;
+}
+
+.container div:not(:last-child) {
+	margin-bottom: 5px;
+}

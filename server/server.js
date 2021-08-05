@@ -18,16 +18,16 @@ const resolvePost = (req) => {
 	});
 };
 
-const extractFileName = (filename) =>
-	filename.slice(0, filename.lastIndexOf('.'));
+const extractExt = (filename) =>
+	filename.slice(filename.lastIndexOf('.'), filename.length);
 
-const mergeFileChunks = async (filePath, fileName) => {
-	const chunkDir = `${UPLOAD_DIR}/${extractFileName(fileName)}`;
+const mergeFileChunks = async (targetFilePath, fileHash) => {
+	const chunkDir = `${UPLOAD_DIR}/${fileHash}`;
 	const chunksPaths = await fse.readdir(chunkDir);
-	await fse.writeFileSync(filePath, '');
+	await fse.writeFileSync(targetFilePath, '');
 	chunksPaths.forEach((chunkPath) => {
 		const chunk = `${chunkDir}/${chunkPath}`;
-		fse.appendFileSync(filePath, fse.readFileSync(chunk));
+		fse.appendFileSync(targetFilePath, fse.readFileSync(chunk));
 		fse.unlinkSync(chunk);
 	});
 	fse.rmdirSync(chunkDir);
@@ -44,13 +44,14 @@ server.on('request', async (req, res) => {
 
 	if (req.url === '/merge') {
 		const data = await resolvePost(req);
-		const { fileName } = data;
-		const filePath = `${UPLOAD_DIR}/${fileName}`;
-		await mergeFileChunks(filePath, fileName);
+		const { fileHash, fileName } = data;
+		const ext = extractExt(fileName);
+		const targetFilePath = `${UPLOAD_DIR}/${fileHash}${ext}`;
+		await mergeFileChunks(targetFilePath, fileHash);
 		res.end(
 			JSON.stringify({
 				code: 0,
-				msg: `file  ${fileName} merged.`,
+				msg: `file ${fileHash} merged.`,
 			})
 		);
 	}
@@ -63,8 +64,8 @@ server.on('request', async (req, res) => {
 		}
 		const [chunk] = files.chunk;
 		const [hash] = fields.hash;
-		const [filename] = fields.filename;
-		const chunkDir = `${UPLOAD_DIR}/${extractFileName(filename)}`;
+		const [fileHash] = fields.fileHash;
+		const chunkDir = `${UPLOAD_DIR}/${fileHash}`;
 
 		if (!fse.existsSync(chunkDir)) {
 			await fse.mkdirs(chunkDir);
