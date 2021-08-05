@@ -7,7 +7,7 @@ import { request } from './request';
 function App() {
 	const [file, setFile] = useState(null);
 	const [hashPercent, setHashPercent] = useState(0);
-	const uploadRef = useRef({ chunks: [], fileHash: null });
+	const uploadRef = useRef({ chunks: [], fileHash: null, percent: 0 });
 	const CHUNK_COUNT = 10;
 
 	const beforeUpload = (file) => {
@@ -114,6 +114,12 @@ function App() {
 				<Col span={24}>计算文件hash进度：</Col>
 				<Col span={24}>
 					<Progress percent={hashPercent} />
+				</Col>
+			</Row>
+			<Row>
+				<Col span={24}>上传总进度：</Col>
+				<Col span={24}>
+					<Progress percent={uploadRef.current.percent} />
 				</Col>
 			</Row>
 		</div>
