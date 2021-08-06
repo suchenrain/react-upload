@@ -85,8 +85,8 @@ function App() {
 		const chunkArr = fileChunkList.map(({ fileChunk }, index) => ({
 			fileHash: fileHashRef.current,
 			chunk: fileChunk,
-			hash: `${fileHashRef.current}-${index}`,
-			percent: uploadedChunks.includes(`${fileHashRef.current}-${index}`)
+			hash: `${fileHashRef.current}_${index}`,
+			percent: uploadedChunks.includes(`${fileHashRef.current}_${index}`)
 				? 100
 				: 0,
 		}));
@@ -108,13 +108,13 @@ function App() {
 				formData.append('hash', hash);
 				formData.append('fileHash', fileHash);
 				formData.append('filename', file.name);
-				return { formData };
+				return { formData, hash };
 			})
-			.map(({ formData }, index) => {
+			.map(({ formData, hash }) => {
 				return request({
 					url: 'http://localhost:8080',
 					data: formData,
-					onProgress: createProgressHandler(index),
+					onProgress: createProgressHandler(hash),
 					requestList: pendingRequest.current,
 				});
 			});
@@ -133,12 +133,19 @@ function App() {
 		}
 	};
 
-	const createProgressHandler = (index) => {
+	const createProgressHandler = (hash) => {
+		// get initial percent
+		const chunk = chunks.find((item) => item.hash === hash);
+		const initialPercent = chunk?.percent || 0;
+
 		return (e) => {
 			setChunks((preChunks) => {
-				preChunks[index].percent = parseInt(
-					String((e.loaded / e.total) * 100)
-				);
+				let preChunk = preChunks.find((item) => item.hash === hash);
+				preChunk.percent =
+					initialPercent +
+					parseInt(
+						String((e.loaded / e.total) * (100 - initialPercent))
+					);
 				return [...preChunks];
 			});
 		};
