@@ -29,6 +29,9 @@ const createUploadedList = async (fileHash) => {
 const mergeFileChunks = async (targetFilePath, fileHash) => {
 	const chunkDir = `${UPLOAD_DIR}/${fileHash}`;
 	const chunksPaths = await fse.readdir(chunkDir);
+	//根据分片下表排序
+	chunksPaths.sort((a, b) => a.split('_')[1] - b.split('_')[1]);
+	
 	await fse.writeFileSync(targetFilePath, '');
 	chunksPaths.forEach((chunkPath) => {
 		const chunk = `${chunkDir}/${chunkPath}`;
@@ -80,7 +83,7 @@ server.on('request', async (req, res) => {
 		res.end(
 			JSON.stringify({
 				code: 0,
-				msg: `file ${fileHash} merged.`,
+				msg: `file ${fileName} merged.`,
 			})
 		);
 		return;

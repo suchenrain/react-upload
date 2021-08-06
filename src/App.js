@@ -241,14 +241,28 @@ function App() {
 		));
 	};
 
+	const disableSelectFile =
+		uploadState === UPLOAD_STATES.HASHING ||
+		uploadState === UPLOAD_STATES.PAUSED ||
+		uploadState === UPLOAD_STATES.UPLOADING;
+
 	return (
 		<>
 			<Toaster />
 			<div className='container'>
 				<Row gutter={[16, 16]} justify='space-between'>
 					<Col>
-						<Upload beforeUpload={beforeUpload} maxCount={1}>
-							<Button icon={<UploadOutlined />}>选择文件</Button>
+						<Upload
+							beforeUpload={beforeUpload}
+							maxCount={1}
+							disabled={disableSelectFile}
+						>
+							<Button
+								disabled={disableSelectFile}
+								icon={<UploadOutlined />}
+							>
+								选择文件
+							</Button>
 						</Upload>
 					</Col>
 					<Col>
