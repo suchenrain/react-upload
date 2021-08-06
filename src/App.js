@@ -3,12 +3,25 @@ import { Upload, Button, Row, Col, Progress, Divider } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useMemo, useRef, useState } from 'react';
 import { request } from './request';
+import toast, { Toaster } from 'react-hot-toast';
+
+const UPLOAD_STATES = {
+	INITIAL: 0,
+	HASHING: 1,
+	UPLOADING: 2,
+	PAUSED: 3,
+	SUCCESS: 4,
+	FAILED: 5,
+};
 
 function App() {
 	const [file, setFile] = useState(null);
 	const [hashPercent, setHashPercent] = useState(0);
 	const [chunks, setChunks] = useState([]);
+	const [uploadState, setUploadState] = useState(UPLOAD_STATES.INITIAL);
 	const fileHashRef = useRef(null);
+	const pendingRequest = useRef([]);
+	const toastId = useRef(null);
 	const CHUNK_COUNT = 10;
 
 	const totalPercent = useMemo(() => {
@@ -25,6 +38,7 @@ function App() {
 
 	const beforeUpload = (file) => {
 		// clear
+		setUploadState(UPLOAD_STATES.INITIAL);
 		setHashPercent(0);
 		setChunks([]);
 		fileHashRef.current = null;
@@ -33,28 +47,61 @@ function App() {
 		return false;
 	};
 
+	const shouldUpload = async (fileHash, fileName) => {
+		const { data } = await request({
+			url: 'http://localhost:8080/verify',
+			headers: {
+				'content-type': 'application/json',
+			},
+			data: JSON.stringify({
+				fileHash,
+				fileName,
+			}),
+		});
+		return JSON.parse(data);
+	};
+
 	const upload = async () => {
 		if (!file) return;
+
+		toastId.current = toast.loading('分片...');
 		const fileChunkList = createChunks(file);
+		setUploadState(UPLOAD_STATES.HASHING);
+		toast.loading('hash文件...', { id: toastId.current });
 		fileHashRef.current = await computeHash(fileChunkList);
+		setUploadState(UPLOAD_STATES.UPLOADING);
+		toast.loading('分片上传中...', { id: toastId.current });
+
+		const { shouldUploadFile, uploadedChunks } = await shouldUpload(
+			fileHashRef.current,
+			file.name
+		);
+		if (!shouldUploadFile) {
+			setUploadState(UPLOAD_STATES.SUCCESS);
+			toast.success('文件秒传成功！', { id: toastId.current });
+			return;
+		}
 
 		const chunkArr = fileChunkList.map(({ fileChunk }, index) => ({
 			fileHash: fileHashRef.current,
 			chunk: fileChunk,
 			hash: `${fileHashRef.current}-${index}`,
-			percent: 0,
+			percent: uploadedChunks.includes(`${fileHashRef.current}-${index}`)
+				? 100
+				: 0,
 		}));
 
 		//render chunks
 		setChunks(chunkArr);
 
-		await uploadChunks(chunkArr);
+		await uploadChunks(chunkArr, uploadedChunks);
 	};
 
-	const uploadChunks = async (chunks) => {
+	const uploadChunks = async (chunks, uploadedChunks = []) => {
 		if (chunks.length < 1) return;
 
 		let reqList = chunks
+			.filter(({ hash }) => !uploadedChunks.includes(hash))
 			.map(({ chunk, hash, fileHash }) => {
 				let formData = new FormData();
 				formData.append('chunk', chunk);
@@ -68,14 +115,22 @@ function App() {
 					url: 'http://localhost:8080',
 					data: formData,
 					onProgress: createProgressHandler(index),
+					requestList: pendingRequest.current,
 				});
 			});
 
 		// 发送切片
-		let res = await Promise.all(reqList);
-
-		// 发送合并请求
-		await mergeRequest();
+		await Promise.all(reqList);
+		if (reqList.length + uploadedChunks.length === chunks.length) {
+			// 发送合并请求
+			toast.loading('合并文件分片...', { id: toastId.current });
+			await mergeRequest();
+			setUploadState(UPLOAD_STATES.SUCCESS);
+			toast.success('文件已上传', { id: toastId.current });
+		} else {
+			toast.error('上传失败', { id: toastId.current });
+			setUploadState(UPLOAD_STATES.FAILED);
+		}
 	};
 
 	const createProgressHandler = (index) => {
@@ -111,6 +166,22 @@ function App() {
 			cur += chunkSize;
 		}
 		return fileChunkList;
+	};
+
+	const handlePauseUpload = () => {
+		setUploadState(UPLOAD_STATES.PAUSED);
+		toast('暂停上传', { id: toastId.current });
+		pendingRequest.current.forEach((xhr) => xhr?.abort());
+		pendingRequest.current = [];
+	};
+	const handleResumeUpload = async () => {
+		setUploadState(UPLOAD_STATES.UPLOADING);
+		toast.loading('分片上传中...', { id: toastId.current });
+		const { uploadedChunks } = await shouldUpload(
+			fileHashRef.current,
+			file.name
+		);
+		uploadChunks(chunks, uploadedChunks);
 	};
 
 	const computeHash = (fileChunks) => {
@@ -164,61 +235,82 @@ function App() {
 	};
 
 	return (
-		<div className='container'>
-			<Row gutter={[16, 16]} justify='space-between'>
-				<Col>
-					<Upload beforeUpload={beforeUpload} maxCount={1}>
-						<Button icon={<UploadOutlined />}>选择文件</Button>
-					</Upload>
-				</Col>
-				<Col>
-					<Button type='primary' onClick={upload} disabled={!file}>
-						上传
-					</Button>
-				</Col>
-			</Row>
-			<Divider />
-			{!!file && (
-				<>
-					<Row>
-						<Col span={24}>计算文件hash进度：</Col>
-						<Col span={24}>
-							<Progress percent={hashPercent} />
-						</Col>
-					</Row>
-					<Divider />
-				</>
-			)}
+		<>
+			<Toaster />
+			<div className='container'>
+				<Row gutter={[16, 16]} justify='space-between'>
+					<Col>
+						<Upload beforeUpload={beforeUpload} maxCount={1}>
+							<Button icon={<UploadOutlined />}>选择文件</Button>
+						</Upload>
+					</Col>
+					<Col>
+						<Button
+							type='primary'
+							onClick={upload}
+							disabled={
+								!file ||
+								(uploadState !== UPLOAD_STATES.INITIAL &&
+									uploadState !== UPLOAD_STATES.FAILED)
+							}
+						>
+							上传
+						</Button>
+						{uploadState === UPLOAD_STATES.UPLOADING && (
+							<Button type='primary' onClick={handlePauseUpload}>
+								暂停
+							</Button>
+						)}
+						{uploadState === UPLOAD_STATES.PAUSED && (
+							<Button type='primary' onClick={handleResumeUpload}>
+								恢复
+							</Button>
+						)}
+					</Col>
+				</Row>
+				<Divider />
+				{!!file && (
+					<>
+						<Row>
+							<Col span={24}>计算文件hash进度：</Col>
+							<Col span={24}>
+								<Progress percent={hashPercent} />
+							</Col>
+						</Row>
+						<Divider />
+					</>
+				)}
 
-			{chunks.length > 0 && (
-				<>
-					<Row>
-						<Col span={4}>上传总进度：</Col>
-						<Col span={20}>
-							<Progress
-								percent={totalPercent}
-								steps={CHUNK_COUNT}
-								strokeColor='#52c41a'
-							/>
-						</Col>
-					</Row>
-					<Divider />
-					<Row>
-						<Col span={10} className='center'>
-							切片Hash
-						</Col>
-						<Col span={4} className='center'>
-							大小
-						</Col>
-						<Col span={10} className='center'>
-							上传进度
-						</Col>
-					</Row>
-				</>
-			)}
+				{chunks.length > 0 && (
+					<>
+						<Row>
+							<Col span={4}>上传总进度：</Col>
+							<Col span={20}>
+								<Progress
+									percent={totalPercent}
+									steps={CHUNK_COUNT}
+									strokeColor='#52c41a'
+								/>
+							</Col>
+						</Row>
+						<Divider />
+						<Row>
+							<Col span={10} className='center'>
+								切片Hash
+							</Col>
+							<Col span={4} className='center'>
+								大小
+							</Col>
+							<Col span={10} className='center'>
+								上传进度
+							</Col>
+						</Row>
+					</>
+				)}
 
-			{renderChunks()}
-		</div>
+				{renderChunks()}
+			</div>
+		</>
 	);
 }
 

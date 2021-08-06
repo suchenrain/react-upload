@@ -21,6 +21,11 @@ const resolvePost = (req) => {
 const extractExt = (filename) =>
 	filename.slice(filename.lastIndexOf('.'), filename.length);
 
+const createUploadedList = async (fileHash) => {
+	const fileDir = `${UPLOAD_DIR}/${fileHash}`;
+	return fse.existsSync(fileDir) ? await fse.readdir(fileDir) : [];
+};
+
 const mergeFileChunks = async (targetFilePath, fileHash) => {
 	const chunkDir = `${UPLOAD_DIR}/${fileHash}`;
 	const chunksPaths = await fse.readdir(chunkDir);
@@ -42,6 +47,30 @@ server.on('request', async (req, res) => {
 		return;
 	}
 
+	if (req.url === '/verify') {
+		const data = await resolvePost(req);
+		const { fileHash, fileName } = data;
+
+		const ext = extractExt(fileName);
+		const filePath = `${UPLOAD_DIR}/${fileHash}${ext}`;
+
+		if (fse.existsSync(filePath)) {
+			res.end(
+				JSON.stringify({
+					shouldUploadFile: false,
+				})
+			);
+		} else {
+			res.end(
+				JSON.stringify({
+					shouldUploadFile: true,
+					uploadedChunks: await createUploadedList(fileHash),
+				})
+			);
+		}
+		return;
+	}
+
 	if (req.url === '/merge') {
 		const data = await resolvePost(req);
 		const { fileHash, fileName } = data;
@@ -54,6 +83,7 @@ server.on('request', async (req, res) => {
 				msg: `file ${fileHash} merged.`,
 			})
 		);
+		return;
 	}
 
 	const multipart = new multiparty.Form();

@@ -4,6 +4,7 @@ export const request = ({
 	data,
 	headers = {},
 	onProgress,
+	requestList,
 }) => {
 	return new Promise((resolve, reject) => {
 		const xhr = new XMLHttpRequest();
@@ -15,9 +16,15 @@ export const request = ({
 		xhr.upload.onprogress = onProgress;
 		xhr.send(data);
 		xhr.onload = (e) => {
+			if (requestList && requestList.length > 0) {
+				let itemIndex = requestList.findIndex((item) => item === xhr);
+				requestList.splice(itemIndex, 1);
+			}
 			resolve({
 				data: e.target.response,
 			});
 		};
+
+		requestList?.push(xhr);
 	});
 };
