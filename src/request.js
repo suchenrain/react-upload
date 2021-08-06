@@ -1,4 +1,10 @@
-export const request = ({ url, method = 'post', data, headers={} }) => {
+export const request = ({
+	url,
+	method = 'post',
+	data,
+	headers = {},
+	onProgress,
+}) => {
 	return new Promise((resolve, reject) => {
 		const xhr = new XMLHttpRequest();
 		xhr.open(method, url);
@@ -6,6 +12,7 @@ export const request = ({ url, method = 'post', data, headers={} }) => {
 		Object.keys(headers).forEach((key) =>
 			xhr.setRequestHeader(key, headers[key])
 		);
+		xhr.upload.onprogress = onProgress;
 		xhr.send(data);
 		xhr.onload = (e) => {
 			resolve({

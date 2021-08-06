@@ -3,8 +3,13 @@
 .container {
 	width: 650px;
 	margin: 0 auto;
+	margin-top: 20px;
 }
 
 .container div:not(:last-child) {
 	margin-bottom: 5px;
+}
+
+.center {
+	text-align: center;
 }
