@@ -24,6 +24,9 @@ export const request = ({
 				data: e.target.response,
 			});
 		};
+		xhr.onerror = () => {
+			reject(new Error(xhr.statusText));
+		};
 
 		requestList?.push(xhr);
 	});

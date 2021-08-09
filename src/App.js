@@ -1,6 +1,6 @@
 import './App.css';
 import { Upload, Button, Row, Col, Progress, Divider } from 'antd';
-import { UploadOutlined } from '@ant-design/icons';
+import { UploadOutlined, CheckCircleFilled } from '@ant-design/icons';
 import { useMemo, useRef, useState } from 'react';
 import { request } from './request';
 import toast, { Toaster } from 'react-hot-toast';
@@ -38,13 +38,17 @@ function App() {
 
 	const beforeUpload = (file) => {
 		// clear
+		reset();
+
+		setFile(file);
+		return false;
+	};
+
+	const reset = () => {
 		setUploadState(UPLOAD_STATES.INITIAL);
 		setHashPercent(0);
 		setChunks([]);
 		fileHashRef.current = null;
-
-		setFile(file);
-		return false;
 	};
 
 	const shouldUpload = async (fileHash, fileName) => {
@@ -62,39 +66,45 @@ function App() {
 	};
 
 	const upload = async () => {
-		if (!file) return;
+		try {
+			if (!file) return;
 
-		toastId.current = toast.loading('分片...');
-		const fileChunkList = createChunks(file);
-		setUploadState(UPLOAD_STATES.HASHING);
-		toast.loading('hash文件...', { id: toastId.current });
-		fileHashRef.current = await computeHash(fileChunkList);
-		setUploadState(UPLOAD_STATES.UPLOADING);
-		toast.loading('分片上传中...', { id: toastId.current });
+			toastId.current = toast.loading('分片...');
+			const fileChunkList = createChunks(file);
+			setUploadState(UPLOAD_STATES.HASHING);
+			toast.loading('hash文件...', { id: toastId.current });
+			fileHashRef.current = await computeHash(fileChunkList);
+			setUploadState(UPLOAD_STATES.UPLOADING);
+			toast.loading('分片上传中...', { id: toastId.current });
 
-		const { shouldUploadFile, uploadedChunks } = await shouldUpload(
-			fileHashRef.current,
-			file.name
-		);
-		if (!shouldUploadFile) {
-			setUploadState(UPLOAD_STATES.SUCCESS);
-			toast.success('文件秒传成功！', { id: toastId.current });
-			return;
+			const { shouldUploadFile, uploadedChunks } = await shouldUpload(
+				fileHashRef.current,
+				file.name
+			);
+			if (!shouldUploadFile) {
+				setUploadState(UPLOAD_STATES.SUCCESS);
+				toast.success('文件秒传成功！', { id: toastId.current });
+				return;
+			}
+
+			const chunkArr = fileChunkList.map(({ fileChunk }, index) => ({
+				fileHash: fileHashRef.current,
+				chunk: fileChunk,
+				hash: `${fileHashRef.current}_${index}`,
+				percent: uploadedChunks.includes(
+					`${fileHashRef.current}_${index}`
+				)
+					? 100
+					: 0,
+			}));
+
+			//render chunks
+			setChunks(chunkArr);
+			await uploadChunks(chunkArr, uploadedChunks);
+		} catch (err) {
+			toast.error(`${err}`, { id: toastId.current });
+			reset();
 		}
-
-		const chunkArr = fileChunkList.map(({ fileChunk }, index) => ({
-			fileHash: fileHashRef.current,
-			chunk: fileChunk,
-			hash: `${fileHashRef.current}_${index}`,
-			percent: uploadedChunks.includes(`${fileHashRef.current}_${index}`)
-				? 100
-				: 0,
-		}));
-
-		//render chunks
-		setChunks(chunkArr);
-
-		await uploadChunks(chunkArr, uploadedChunks);
 	};
 
 	const uploadChunks = async (chunks, uploadedChunks = []) => {
@@ -132,7 +142,6 @@ function App() {
 			setUploadState(UPLOAD_STATES.FAILED);
 		}
 	};
-
 	const createProgressHandler = (hash) => {
 		// get initial percent
 		const chunk = chunks.find((item) => item.hash === hash);
@@ -143,9 +152,7 @@ function App() {
 				let preChunk = preChunks.find((item) => item.hash === hash);
 				preChunk.percent =
 					initialPercent +
-					parseInt(
-						String((e.loaded / e.total) * (100 - initialPercent))
-					);
+					(e.loaded / e.total) * (100 - initialPercent);
 				return [...preChunks];
 			});
 		};
@@ -218,6 +225,18 @@ function App() {
 		);
 	};
 
+	const showStatus = (percent) => {
+		if (percent === 0) {
+			return `等待上传...`;
+		}
+		if (percent === 100) {
+			return <CheckCircleFilled />;
+		}
+		return uploadState === UPLOAD_STATES.PAUSED
+			? `已暂停 [${percent.toFixed(2)}%]`
+			: `上传中 [${percent.toFixed(2)}%]`;
+	};
+
 	const renderChunks = () => {
 		return chunks.map((chunk) => (
 			<Row key={chunk.hash}>
@@ -230,6 +249,7 @@ function App() {
 				<Col span={10} className='center'>
 					<Progress
 						percent={chunk.percent}
+						format={showStatus}
 						strokeColor={{
 							'0%': '#ffc107',
 							'100%': '#87d068',
@@ -248,7 +268,16 @@ function App() {
 
 	return (
 		<>
-			<Toaster />
+			<Toaster
+				toastOptions={{
+					loading: {
+						style: {
+							background: '#3c3c3c',
+							color: '#fff',
+						},
+					},
+				}}
+			/>
 			<div className='container'>
 				<Row gutter={[16, 16]} justify='space-between'>
 					<Col>
@@ -269,6 +298,7 @@ function App() {
 						<Button
 							type='primary'
 							onClick={upload}
+							style={{ marginRight: '8px' }}
 							disabled={
 								!file ||
 								(uploadState !== UPLOAD_STATES.INITIAL &&
