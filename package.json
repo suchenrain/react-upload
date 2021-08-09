@@ -1,41 +1,54 @@
 {
-  "name": "react-upload",
-  "version": "0.1.0",
-  "private": true,
-  "dependencies": {
-    "@testing-library/jest-dom": "^5.11.4",
-    "@testing-library/react": "^11.1.0",
-    "@testing-library/user-event": "^12.1.10",
-    "antd": "^4.16.10",
-    "multiparty": "^4.2.2",
-    "react": "^17.0.2",
-    "react-dom": "^17.0.2",
-    "react-hot-toast": "^2.1.0",
-    "react-scripts": "4.0.3",
-    "web-vitals": "^1.0.1"
-  },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  }
+	"name": "react-upload",
+	"version": "0.1.0",
+	"private": true,
+	"author": {
+		"name": "suchenrain",
+		"email": "suchenxiaoyu@qq.com"
+	},
+	"keywords": [
+		"react",
+		"前端大文件上传",
+		"切片上传",
+		"断点续传",
+		"web worker",
+		"spark-md5"
+	],
+	"license": "MIT",
+	"dependencies": {
+		"@testing-library/jest-dom": "^5.11.4",
+		"@testing-library/react": "^11.1.0",
+		"@testing-library/user-event": "^12.1.10",
+		"antd": "^4.16.10",
+		"multiparty": "^4.2.2",
+		"react": "^17.0.2",
+		"react-dom": "^17.0.2",
+		"react-hot-toast": "^2.1.0",
+		"react-scripts": "4.0.3",
+		"web-vitals": "^1.0.1"
+	},
+	"scripts": {
+		"start": "react-scripts start",
+		"build": "react-scripts build",
+		"test": "react-scripts test",
+		"eject": "react-scripts eject"
+	},
+	"eslintConfig": {
+		"extends": [
+			"react-app",
+			"react-app/jest"
+		]
+	},
+	"browserslist": {
+		"production": [
+			">0.2%",
+			"not dead",
+			"not op_mini all"
+		],
+		"development": [
+			"last 1 chrome version",
+			"last 1 firefox version",
+			"last 1 safari version"
+		]
+	}
 }
