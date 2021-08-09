@@ -31,7 +31,7 @@ const mergeFileChunks = async (targetFilePath, fileHash) => {
 	const chunksPaths = await fse.readdir(chunkDir);
 	//根据分片下表排序
 	chunksPaths.sort((a, b) => a.split('_')[1] - b.split('_')[1]);
-	
+
 	await fse.writeFileSync(targetFilePath, '');
 	chunksPaths.forEach((chunkPath) => {
 		const chunk = `${chunkDir}/${chunkPath}`;
@@ -57,6 +57,7 @@ server.on('request', async (req, res) => {
 		const ext = extractExt(fileName);
 		const filePath = `${UPLOAD_DIR}/${fileHash}${ext}`;
 
+		res.status = 200;
 		if (fse.existsSync(filePath)) {
 			res.end(
 				JSON.stringify({
@@ -80,6 +81,7 @@ server.on('request', async (req, res) => {
 		const ext = extractExt(fileName);
 		const targetFilePath = `${UPLOAD_DIR}/${fileHash}${ext}`;
 		await mergeFileChunks(targetFilePath, fileHash);
+		res.status = 200;
 		res.end(
 			JSON.stringify({
 				code: 0,
@@ -105,6 +107,7 @@ server.on('request', async (req, res) => {
 		}
 
 		await fse.move(chunk.path, `${chunkDir}/${hash}`, { overwrite: true });
+		res.status = 200;
 		res.end('received file chunk');
 	});
 });

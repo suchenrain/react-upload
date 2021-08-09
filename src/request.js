@@ -16,16 +16,22 @@ export const request = ({
 		xhr.upload.onprogress = onProgress;
 		xhr.send(data);
 		xhr.onload = (e) => {
-			if (requestList && requestList.length > 0) {
-				let itemIndex = requestList.findIndex((item) => item === xhr);
-				requestList.splice(itemIndex, 1);
+			if (e.currentTarget.status === 200) {
+				if (requestList && requestList.length > 0) {
+					let itemIndex = requestList.findIndex(
+						(item) => item === xhr
+					);
+					requestList.splice(itemIndex, 1);
+				}
+				resolve({
+					data: e.target.response,
+				});
+			} else {
+				reject(new Error('上传失败'));
 			}
-			resolve({
-				data: e.target.response,
-			});
 		};
 		xhr.onerror = () => {
-			reject(new Error(xhr.statusText));
+			reject(new Error('网络好像出问题啦~'));
 		};
 
 		requestList?.push(xhr);

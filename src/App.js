@@ -1,6 +1,10 @@
 import './App.css';
 import { Upload, Button, Row, Col, Progress, Divider } from 'antd';
-import { UploadOutlined, CheckCircleFilled } from '@ant-design/icons';
+import {
+	UploadOutlined,
+	CheckCircleFilled,
+	CloseCircleFilled,
+} from '@ant-design/icons';
 import { useMemo, useRef, useState } from 'react';
 import { request } from './request';
 import toast, { Toaster } from 'react-hot-toast';
@@ -67,43 +71,49 @@ function App() {
 
 	const upload = async () => {
 		try {
-			if (!file) return;
-
-			toastId.current = toast.loading('分片...');
-			const fileChunkList = createChunks(file);
-			setUploadState(UPLOAD_STATES.HASHING);
-			toast.loading('hash文件...', { id: toastId.current });
-			fileHashRef.current = await computeHash(fileChunkList);
-			setUploadState(UPLOAD_STATES.UPLOADING);
-			toast.loading('分片上传中...', { id: toastId.current });
-
-			const { shouldUploadFile, uploadedChunks } = await shouldUpload(
-				fileHashRef.current,
-				file.name
-			);
-			if (!shouldUploadFile) {
-				setUploadState(UPLOAD_STATES.SUCCESS);
-				toast.success('文件秒传成功！', { id: toastId.current });
+			if (uploadState === UPLOAD_STATES.FAILED) {
+				await handleResumeUpload();
 				return;
 			}
+			if (uploadState === UPLOAD_STATES.INITIAL) {
+				if (!file) return;
 
-			const chunkArr = fileChunkList.map(({ fileChunk }, index) => ({
-				fileHash: fileHashRef.current,
-				chunk: fileChunk,
-				hash: `${fileHashRef.current}_${index}`,
-				percent: uploadedChunks.includes(
-					`${fileHashRef.current}_${index}`
-				)
-					? 100
-					: 0,
-			}));
+				toastId.current = toast.loading('分片...');
+				const fileChunkList = createChunks(file);
+				setUploadState(UPLOAD_STATES.HASHING);
+				toast.loading('hash文件...', { id: toastId.current });
+				fileHashRef.current = await computeHash(fileChunkList);
+				setUploadState(UPLOAD_STATES.UPLOADING);
+				toast.loading('分片上传中...', { id: toastId.current });
 
-			//render chunks
-			setChunks(chunkArr);
-			await uploadChunks(chunkArr, uploadedChunks);
+				const { shouldUploadFile, uploadedChunks } = await shouldUpload(
+					fileHashRef.current,
+					file.name
+				);
+				if (!shouldUploadFile) {
+					setUploadState(UPLOAD_STATES.SUCCESS);
+					toast.success('文件秒传成功！', { id: toastId.current });
+					return;
+				}
+
+				const chunkArr = fileChunkList.map(({ fileChunk }, index) => ({
+					fileHash: fileHashRef.current,
+					chunk: fileChunk,
+					hash: `${fileHashRef.current}_${index}`,
+					percent: uploadedChunks.includes(
+						`${fileHashRef.current}_${index}`
+					)
+						? 100
+						: 0,
+				}));
+
+				//render chunks
+				setChunks(chunkArr);
+				await uploadChunks(chunkArr, uploadedChunks);
+			}
 		} catch (err) {
 			toast.error(`${err}`, { id: toastId.current });
-			reset();
+			setUploadState(UPLOAD_STATES.FAILED);
 		}
 	};
 
@@ -189,13 +199,23 @@ function App() {
 		pendingRequest.current = [];
 	};
 	const handleResumeUpload = async () => {
-		setUploadState(UPLOAD_STATES.UPLOADING);
-		toast.loading('分片上传中...', { id: toastId.current });
-		const { uploadedChunks } = await shouldUpload(
-			fileHashRef.current,
-			file.name
-		);
-		uploadChunks(chunks, uploadedChunks);
+		try {
+			setUploadState(UPLOAD_STATES.UPLOADING);
+			toast.loading('分片上传中...', { id: toastId.current });
+			const { uploadedChunks } = await shouldUpload(
+				fileHashRef.current,
+				file.name
+			);
+			uploadChunks(chunks, uploadedChunks);
+		} catch (err) {
+			toast.error(`${err}`, { id: toastId.current });
+			setUploadState(UPLOAD_STATES.FAILED);
+		}
+	};
+
+	const clearFile = () => {
+		setFile(null);
+		reset();
 	};
 
 	const computeHash = (fileChunks) => {
@@ -232,9 +252,17 @@ function App() {
 		if (percent === 100) {
 			return <CheckCircleFilled />;
 		}
-		return uploadState === UPLOAD_STATES.PAUSED
-			? `已暂停 [${percent.toFixed(2)}%]`
-			: `上传中 [${percent.toFixed(2)}%]`;
+		switch (uploadState) {
+			case UPLOAD_STATES.PAUSED:
+				return `已暂停 [${percent.toFixed(2)}%]`;
+			case UPLOAD_STATES.UPLOADING:
+				return `上传中 [${percent.toFixed(2)}%]`;
+			case UPLOAD_STATES.FAILED:
+				return <CloseCircleFilled />;
+
+			default:
+				return;
+		}
 	};
 
 	const renderChunks = () => {
@@ -250,10 +278,23 @@ function App() {
 					<Progress
 						percent={chunk.percent}
 						format={showStatus}
-						strokeColor={{
-							'0%': '#ffc107',
-							'100%': '#87d068',
-						}}
+						status={
+							uploadState === UPLOAD_STATES.FAILED &&
+							chunk.percent < 100 &&
+							chunk.percent > 0
+								? 'exception'
+								: ''
+						}
+						strokeColor={
+							uploadState === UPLOAD_STATES.FAILED &&
+							chunk.percent < 100 &&
+							chunk.percent > 0
+								? ''
+								: {
+										'0%': '#ffc107',
+										'100%': '#87d068',
+								  }
+						}
 						style={{ width: '75%' }}
 					/>
 				</Col>
@@ -307,6 +348,12 @@ function App() {
 						>
 							上传
 						</Button>
+						{(uploadState === UPLOAD_STATES.SUCCESS ||
+							uploadState === UPLOAD_STATES.FAILED) && (
+							<Button type='primary' onClick={clearFile}>
+								清空
+							</Button>
+						)}
 						{uploadState === UPLOAD_STATES.UPLOADING && (
 							<Button type='primary' onClick={handlePauseUpload}>
 								暂停
