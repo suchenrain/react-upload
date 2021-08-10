@@ -22,30 +22,48 @@ const extractExt = (filename) =>
 	filename.slice(filename.lastIndexOf('.'), filename.length);
 
 const createUploadedList = async (fileHash) => {
-	const fileDir = `${UPLOAD_DIR}/${fileHash}`;
+	const fileDir = path.resolve(UPLOAD_DIR, fileHash);
 	return fse.existsSync(fileDir) ? await fse.readdir(fileDir) : [];
 };
 
-const mergeFileChunks = async (targetFilePath, fileHash) => {
-	const chunkDir = `${UPLOAD_DIR}/${fileHash}`;
-	const chunksPaths = await fse.readdir(chunkDir);
+const pipeStream = (chunkPath, writeStream) => {
+	return new Promise((resolve) => {
+		const chunkReadStream = fse.createReadStream(chunkPath);
+		chunkReadStream.on('end', () => {
+			fse.unlinkSync(chunkPath);
+			resolve();
+		});
+		chunkReadStream.pipe(writeStream);
+	});
+};
+
+const mergeFileChunks = async (targetFilePath, fileHash, chunkSize) => {
+	const chunkDir = path.resolve(UPLOAD_DIR, fileHash);
+	const chunkNames = await fse.readdir(chunkDir);
 	//根据分片下表排序
-	chunksPaths.sort((a, b) => a.split('_')[1] - b.split('_')[1]);
+	chunkNames.sort((a, b) => a.split('_')[1] - b.split('_')[1]);
 
 	await fse.writeFileSync(targetFilePath, '');
-	chunksPaths.forEach((chunkPath) => {
-		const chunk = `${chunkDir}/${chunkPath}`;
-		fse.appendFileSync(targetFilePath, fse.readFileSync(chunk));
-		fse.unlinkSync(chunk);
-	});
-	fse.rmdirSync(chunkDir);
+
+	await Promise.all(
+		chunkNames.map((chunkName, index) => {
+			const chunkPath = path.resolve(chunkDir, chunkName);
+			return pipeStream(
+				chunkPath,
+				fse.createWriteStream(targetFilePath, {
+					start: index * chunkSize,
+				})
+			);
+		})
+	);
+
+	await fse.rmdir(chunkDir);
 };
 
 server.on('request', async (req, res) => {
 	res.setHeader('Access-Control-Allow-Origin', '*');
 	res.setHeader('Access-Control-Allow-Headers', '*');
 	if (req.method === 'OPTIONS') {
-		res.status = 200;
 		res.end();
 		return;
 	}
@@ -55,9 +73,8 @@ server.on('request', async (req, res) => {
 		const { fileHash, fileName } = data;
 
 		const ext = extractExt(fileName);
-		const filePath = `${UPLOAD_DIR}/${fileHash}${ext}`;
+		const filePath = path.resolve(UPLOAD_DIR, `${fileHash}${ext}`);
 
-		res.status = 200;
 		if (fse.existsSync(filePath)) {
 			res.end(
 				JSON.stringify({
@@ -77,11 +94,11 @@ server.on('request', async (req, res) => {
 
 	if (req.url === '/merge') {
 		const data = await resolvePost(req);
-		const { fileHash, fileName } = data;
+		const { fileHash, fileName, chunkSize } = data;
 		const ext = extractExt(fileName);
-		const targetFilePath = `${UPLOAD_DIR}/${fileHash}${ext}`;
-		await mergeFileChunks(targetFilePath, fileHash);
-		res.status = 200;
+		const targetFilePath = path.resolve(UPLOAD_DIR, `${fileHash}${ext}`);
+		await mergeFileChunks(targetFilePath, fileHash, chunkSize);
+
 		res.end(
 			JSON.stringify({
 				code: 0,
@@ -100,7 +117,7 @@ server.on('request', async (req, res) => {
 		const [chunk] = files.chunk;
 		const [hash] = fields.hash;
 		const [fileHash] = fields.fileHash;
-		const chunkDir = `${UPLOAD_DIR}/${fileHash}`;
+		const chunkDir = path.resolve(UPLOAD_DIR, fileHash);
 
 		if (!fse.existsSync(chunkDir)) {
 			await fse.mkdirs(chunkDir);

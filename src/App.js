@@ -26,14 +26,12 @@ function App() {
 	const fileHashRef = useRef(null);
 	const pendingRequest = useRef([]);
 	const toastId = useRef(null);
-	const CHUNK_COUNT = 10;
+	const CHUNK_SIZE = 100 * 1024;
 
 	const totalPercent = useMemo(() => {
 		if (!file || chunks.length < 1) return 0;
 		const loaded = chunks
-			.map((item) => {
-				return item.chunk.size * item.percent;
-			})
+			.map((item) => item.chunk.size * item.percent)
 			.reduce((acc, cur) => acc + cur);
 
 		return (loaded / file.size).toFixed(2);
@@ -191,13 +189,13 @@ function App() {
 			data: JSON.stringify({
 				fileHash: fileHashRef.current,
 				fileName: file.name,
+				chunkSize: CHUNK_SIZE,
 			}),
 		});
 	};
 
-	const createChunks = (file, counts = CHUNK_COUNT) => {
+	const createChunks = (file, chunkSize = CHUNK_SIZE) => {
 		const fileChunkList = [];
-		const chunkSize = Math.ceil(file.size / counts);
 		let cur = 0;
 		while (cur < file.size) {
 			fileChunkList.push({ fileChunk: file.slice(cur, cur + chunkSize) });
@@ -238,7 +236,7 @@ function App() {
 			hashWorker.postMessage({ fileChunks });
 			hashWorker.onmessage = (e) => {
 				const { percentage, hash } = e.data;
-				setHashPercent(percentage);
+				setHashPercent(percentage.toFixed(2));
 				if (hash) {
 					resolve(hash);
 				}
@@ -254,9 +252,7 @@ function App() {
 
 		const i = Math.floor(Math.log(bytes) / Math.log(k));
 
-		return (
-			parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i]
-		);
+		return (bytes / Math.pow(k, i)).toFixed(dm) + ' ' + sizes[i];
 	};
 
 	const showStatus = (percent) => {
@@ -420,7 +416,7 @@ function App() {
 							<Col span={20}>
 								<Progress
 									percent={totalPercent}
-									steps={CHUNK_COUNT}
+									steps={chunks.length}
 									strokeColor='#52c41a'
 								/>
 							</Col>
