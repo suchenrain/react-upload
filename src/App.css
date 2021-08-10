@@ -17,6 +17,12 @@
 .file-selected {
 	padding-left: 10px;
 	font-style: italic;
+	max-width: 300px;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	display: inline-block;
+	white-space: nowrap;
+	vertical-align: text-top;
 }
 .file-selected-size {
 	padding-left: 10px;
