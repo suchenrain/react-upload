@@ -8,6 +8,13 @@
 -   `fse` 处理文件
 -   `multiparty` 处理`formData`
 
+功能:
+
+-   大文件切片
+-   暂停/恢复上传
+-   断点续传，记忆已上传部分
+-   文件秒传
+
 ## 开始
 
 ```sh
@@ -26,3 +33,13 @@ node server/server.js
 ```
 
 ## 演示
+
+### 暂停/恢复/重复上传
+
+
+![upload_pause gif](https://user-images.githubusercontent.com/7972688/128820298-db9a37e3-9be5-41f6-b558-92d0dc115566.gif)
+
+### 上传中途失败，下次断点续传
+
+
+![upload_continue gif](https://user-images.githubusercontent.com/7972688/128820450-4dbea09b-65e2-44af-ae5c-816d394675f7.gif)
