@@ -71,46 +71,60 @@ function App() {
 
 	const upload = async () => {
 		try {
-			if (uploadState === UPLOAD_STATES.FAILED) {
-				await handleResumeUpload();
-				return;
-			}
-			if (uploadState === UPLOAD_STATES.INITIAL) {
-				if (!file) return;
+			if (!file) return;
 
+			if (uploadState === UPLOAD_STATES.INITIAL) {
 				toastId.current = toast.loading('分片...');
 				const fileChunkList = createChunks(file);
+
 				setUploadState(UPLOAD_STATES.HASHING);
-				toast.loading('hash文件...', { id: toastId.current });
+				toast.loading('计算文件hash...', { id: toastId.current });
 				fileHashRef.current = await computeHash(fileChunkList);
-				setUploadState(UPLOAD_STATES.UPLOADING);
-				toast.loading('分片上传中...', { id: toastId.current });
 
-				const { shouldUploadFile, uploadedChunks } = await shouldUpload(
-					fileHashRef.current,
-					file.name
+				const primaryFileChunks = fileChunkList.map(
+					({ fileChunk }, index) => ({
+						fileHash: fileHashRef.current,
+						chunk: fileChunk,
+						hash: `${fileHashRef.current}_${index}`,
+						percent: 0,
+					})
 				);
-				if (!shouldUploadFile) {
-					setUploadState(UPLOAD_STATES.SUCCESS);
-					toast.success('文件秒传成功！', { id: toastId.current });
-					return;
-				}
-
-				const chunkArr = fileChunkList.map(({ fileChunk }, index) => ({
-					fileHash: fileHashRef.current,
-					chunk: fileChunk,
-					hash: `${fileHashRef.current}_${index}`,
-					percent: uploadedChunks.includes(
-						`${fileHashRef.current}_${index}`
-					)
-						? 100
-						: 0,
-				}));
-
-				//render chunks
-				setChunks(chunkArr);
-				await uploadChunks(chunkArr, uploadedChunks);
+				setChunks(primaryFileChunks);
 			}
+
+			setUploadState(UPLOAD_STATES.UPLOADING);
+
+			toast.loading('分片上传中...', { id: toastId.current });
+
+			const { shouldUploadFile, uploadedChunks } = await shouldUpload(
+				fileHashRef.current,
+				file.name
+			);
+			if (!shouldUploadFile) {
+				setUploadState(UPLOAD_STATES.SUCCESS);
+				toast.success('文件秒传成功！', { id: toastId.current });
+				setChunks((preChunks) => {
+					return preChunks.map((item) => ({
+						...item,
+						percent: 100,
+					}));
+				});
+				return;
+			}
+			let chunkArr = [];
+			//render chunks
+			setChunks((preChunks) => {
+				chunkArr = preChunks.map(
+					({ fileHash, chunk, hash, percent }) => ({
+						fileHash,
+						chunk,
+						hash,
+						percent: uploadedChunks.includes(hash) ? 100 : percent,
+					})
+				);
+				return chunkArr;
+			});
+			await uploadChunks(chunkArr, uploadedChunks);
 		} catch (err) {
 			toast.error(`${err}`, { id: toastId.current });
 			setUploadState(UPLOAD_STATES.FAILED);
@@ -247,7 +261,14 @@ function App() {
 
 	const showStatus = (percent) => {
 		if (percent === 0) {
-			return `等待上传...`;
+			if (uploadState === UPLOAD_STATES.FAILED)
+				return (
+					<>
+						<CloseCircleFilled />
+						{` 连接异常`}
+					</>
+				);
+			else return `等待上传...`;
 		}
 		if (percent === 100) {
 			return <CheckCircleFilled />;
@@ -258,7 +279,12 @@ function App() {
 			case UPLOAD_STATES.UPLOADING:
 				return `上传中 [${percent.toFixed(2)}%]`;
 			case UPLOAD_STATES.FAILED:
-				return <CloseCircleFilled />;
+				return (
+					<>
+						<CloseCircleFilled />
+						{` 上传失败`}
+					</>
+				);
 
 			default:
 				return;
@@ -280,8 +306,7 @@ function App() {
 						format={showStatus}
 						status={
 							uploadState === UPLOAD_STATES.FAILED &&
-							chunk.percent < 100 &&
-							chunk.percent > 0
+							chunk.percent < 100
 								? 'exception'
 								: ''
 						}
@@ -323,6 +348,7 @@ function App() {
 				<Row gutter={[16, 16]} justify='space-between'>
 					<Col>
 						<Upload
+							showUploadList={false}
 							beforeUpload={beforeUpload}
 							maxCount={1}
 							disabled={disableSelectFile}
@@ -334,6 +360,14 @@ function App() {
 								选择文件
 							</Button>
 						</Upload>
+						{file && (
+							<>
+								<span className='file-selected'>{`${file.name}`}</span>
+								<span className='file-selected-size'>{`[${formatBytes(
+									file.size
+								)}]`}</span>
+							</>
+						)}
 					</Col>
 					<Col>
 						<Button

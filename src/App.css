@@ -13,3 +13,13 @@
 .center {
 	text-align: center;
 }
+
+.file-selected {
+	padding-left: 10px;
+	font-style: italic;
+}
+.file-selected-size {
+	padding-left: 10px;
+	font-weight: 600;
+	font-style: italic;
+}
